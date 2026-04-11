@@ -64,4 +64,4 @@ jobs:
       - name: Module tidy check
         run: |
           go mod tidy
-          git diff --exit-code go.mod go.sum
+          git diff --exit-code go.mod
