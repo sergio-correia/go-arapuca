@@ -1,0 +1,29 @@
+repos:
+  - repo: local
+    hooks:
+      - id: go-vet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -l -w
+        language: system
+        types: [go]
+
+      - id: go-build
+        name: go build
+        entry: bash -c 'CGO_ENABLED=1 go build ./...'
+        language: system
+        pass_filenames: false
+        types: [go]
+
+      - id: go-test
+        name: go test
+        entry: bash -c 'CGO_ENABLED=1 go test ./...'
+        language: system
+        pass_filenames: false
+        types: [go]
