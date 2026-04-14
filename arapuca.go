@@ -198,6 +198,9 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 	runtime.KeepAlive(cfg.Stdin)
 	runtime.KeepAlive(cfg.Stdout)
 	runtime.KeepAlive(cfg.Stderr)
+	for _, f := range extraFiles {
+		runtime.KeepAlive(f)
+	}
 
 	pid := int(C.arapuca_process_pid(proc))
 	p := &Process{
