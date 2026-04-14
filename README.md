@@ -124,6 +124,7 @@ type Config struct {
     TaskID             string
     Phase              string
     WorkDir            string
+    Stdin              *os.File  // nil = inherit
     Stdout, Stderr     *os.File  // nil = inherit
     NetworkProxySocket string
 }

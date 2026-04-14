@@ -135,6 +135,9 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 			C.arapuca_config_set_work_dir(c, cs)
 		})
 	}
+	if cfg.Stdin != nil {
+		C.arapuca_config_set_stdin_fd(lcfg, C.int32_t(cfg.Stdin.Fd()))
+	}
 	if cfg.Stdout != nil {
 		C.arapuca_config_set_stdout_fd(lcfg, C.int32_t(cfg.Stdout.Fd()))
 	}
@@ -189,6 +192,12 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		return nil, err
 	}
 	runtime.UnlockOSThread()
+
+	// Prevent GC from finalizing the *os.File (and closing the FD)
+	// before the C code has duplicated it via F_DUPFD_CLOEXEC.
+	runtime.KeepAlive(cfg.Stdin)
+	runtime.KeepAlive(cfg.Stdout)
+	runtime.KeepAlive(cfg.Stderr)
 
 	pid := int(C.arapuca_process_pid(proc))
 	p := &Process{
@@ -323,6 +332,7 @@ type Config struct {
 	TaskID             string   // Task identifier.
 	Phase              string   // Current phase (opaque to arapuca).
 	WorkDir            string   // Working directory (empty = inherit).
+	Stdin              *os.File // Redirect stdin (nil = inherit).
 	Stdout             *os.File // Redirect stdout (nil = inherit).
 	Stderr             *os.File // Redirect stderr (nil = inherit).
 	NetworkProxySocket string   // Path to network proxy Unix socket.
