@@ -149,6 +149,13 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 			C.arapuca_config_set_network_proxy(c, cs)
 		})
 	}
+	for k, v := range cfg.Env {
+		ck := C.CString(k)
+		cv := C.CString(v)
+		C.arapuca_config_add_env(lcfg, ck, cv)
+		C.free(unsafe.Pointer(ck))
+		C.free(unsafe.Pointer(cv))
+	}
 
 	// Build command.
 	cCmd := C.CString(cmd)
@@ -338,7 +345,8 @@ type Config struct {
 	Stdin              *os.File // Redirect stdin (nil = inherit).
 	Stdout             *os.File // Redirect stdout (nil = inherit).
 	Stderr             *os.File // Redirect stderr (nil = inherit).
-	NetworkProxySocket string   // Path to network proxy Unix socket.
+	NetworkProxySocket string            // Path to network proxy Unix socket.
+	Env                map[string]string // Caller-supplied env vars for subprocess.
 }
 
 // ResourceUsage holds cgroup v2 resource usage statistics.
