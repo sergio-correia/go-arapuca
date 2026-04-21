@@ -338,13 +338,13 @@ type Profile struct {
 // Config holds the full configuration for launching a sandboxed process.
 type Config struct {
 	Profile            Profile
-	SocketDir          string   // Per-agent socket directory.
-	TaskID             string   // Task identifier.
-	Phase              string   // Current phase (opaque to arapuca).
-	WorkDir            string   // Working directory (empty = inherit).
-	Stdin              *os.File // Redirect stdin (nil = inherit).
-	Stdout             *os.File // Redirect stdout (nil = inherit).
-	Stderr             *os.File // Redirect stderr (nil = inherit).
+	SocketDir          string            // Per-agent socket directory.
+	TaskID             string            // Task identifier.
+	Phase              string            // Current phase (opaque to arapuca).
+	WorkDir            string            // Working directory (empty = inherit).
+	Stdin              *os.File          // Redirect stdin (nil = inherit).
+	Stdout             *os.File          // Redirect stdout (nil = inherit).
+	Stderr             *os.File          // Redirect stderr (nil = inherit).
 	NetworkProxySocket string            // Path to network proxy Unix socket.
 	Env                map[string]string // Caller-supplied env vars for subprocess.
 }
