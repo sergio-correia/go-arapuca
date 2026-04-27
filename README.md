@@ -43,6 +43,8 @@ library first.
 
 ## Usage
 
+### Process-level sandbox
+
 ```go
 package main
 
@@ -92,6 +94,63 @@ func main() {
 }
 ```
 
+### Micro-VM isolation (Linux only, requires `-tags microvm`)
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    arapuca "github.com/sergio-correia/go-arapuca"
+)
+
+func main() {
+    if !arapuca.MicroVmAvailable() {
+        log.Fatal("micro-VM isolation not available (no KVM?)")
+    }
+
+    // Pull image (~500MB first time, cached for reuse).
+    imagePath, err := arapuca.ImagePull("fedora", "42")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("image:", imagePath)
+
+    sb, err := arapuca.New()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer sb.Close()
+
+    cfg := arapuca.Config{
+        Profile: arapuca.Profile{
+            ReadPaths:  []string{"/home/user/project"},
+            WritePaths: []string{"/tmp/workspace"},
+            Isolation: &arapuca.MicroVmIsolation{
+                Distro:  "fedora",
+                Version: "42",
+                CPUs:    2,
+                MemMB:   2048,
+            },
+        },
+        TaskID: "vm-task-1",
+        Phase:  "execute",
+    }
+
+    proc, err := sb.Launch(context.Background(), cfg, "make", []string{"test"}, nil)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    exitCode, _ := proc.Wait()
+    fmt.Printf("exit=%d\n", exitCode)
+    proc.Cleanup()
+}
+```
+
 ## API
 
 ### Sandbox
@@ -113,6 +172,16 @@ proc.OOMCount() int                // OOM kill count (before Cleanup)
 proc.Cleanup()                     // release resources
 ```
 
+### Micro-VM (requires `-tags microvm`)
+
+```go
+arapuca.MicroVmAvailable() bool                  // probe KVM + qemu-img
+arapuca.ImagePull(distro, version) (string, error) // download and cache image
+```
+
+Without the build tag, `MicroVmAvailable()` returns false and
+`ImagePull()` returns an error.
+
 ### Utilities
 
 ```go
@@ -129,11 +198,20 @@ arapuca.DiskUsageMB(path) uint64
 ```go
 type Profile struct {
     ReadPaths, WritePaths []string
-    MaxMemoryMB           uint64  // 0 = no limit
-    MaxCPUPct             uint32  // 0 = no limit; 200 = 2 cores
+    MaxMemoryMB           uint64             // 0 = no limit
+    MaxCPUPct             uint32             // 0 = no limit; 200 = 2 cores
     MaxPIDs               uint32
     MaxFileSizeMB         uint64
     UseNetNS              bool
+    Isolation             *MicroVmIsolation  // nil = process-level sandbox
+}
+
+type MicroVmIsolation struct {
+    Distro    string  // e.g. "fedora", "centos" (or use ImagePath)
+    Version   string  // e.g. "42", "9"
+    ImagePath string  // explicit qcow2 path (alternative to Distro/Version)
+    CPUs      uint32
+    MemMB     uint32
 }
 
 type Config struct {
@@ -142,9 +220,10 @@ type Config struct {
     TaskID             string
     Phase              string
     WorkDir            string
-    Stdin              *os.File  // nil = inherit
-    Stdout, Stderr     *os.File  // nil = inherit
+    Stdin              *os.File          // nil = inherit
+    Stdout, Stderr     *os.File          // nil = inherit
     NetworkProxySocket string
+    Env                map[string]string // extra env vars for subprocess
 }
 
 type ResourceUsage struct {
@@ -166,30 +245,52 @@ type ResourceUsage struct {
 ## Building the C library
 
 go-arapuca links against `libarapuca.a` (a Rust static library)
-discovered via pkg-config. To build and install it from a local
-arapuca checkout:
+discovered via pkg-config. Two build modes are available:
+
+### Core sandbox (all platforms)
 
 ```bash
-# Build and install to ~/.local (default)
 make setup
-
-# Or specify a different arapuca checkout and/or prefix
-make setup ARAPUCA_DIR=/path/to/arapuca PREFIX=/opt/arapuca
 ```
 
-This runs `make install` in the arapuca repo, which:
-1. Builds `libarapuca.a` via `cargo build --release`
-2. Generates `arapuca.h` via cbindgen
-3. Generates `arapuca.pc` with the correct link flags
-4. Installs all three to `$(PREFIX)/{lib,include,lib/pkgconfig}`
+Installs process-level sandbox support only. No libkrun or OpenSSL
+development packages required.
 
-After installing, ensure pkg-config can find it:
+### With micro-VM support (Linux only)
 
 ```bash
+make setup-microvm
+```
+
+Installs with micro-VM isolation via libkrun. Requires `libkrun-devel`
+and `openssl-devel` (or equivalent) packages. Build Go code with
+`-tags microvm`:
+
+```bash
+go build -tags microvm ./...
+```
+
+### Build matrix
+
+| arapuca install      | go-arapuca build                | Result                      |
+|----------------------|---------------------------------|-----------------------------|
+| `make setup`         | `go build`                      | core sandbox only           |
+| `make setup`         | `go build -tags microvm`        | **link error**              |
+| `make setup-microvm` | `go build`                      | core sandbox only           |
+| `make setup-microvm` | `go build -tags microvm`        | full micro-VM support       |
+
+### Custom paths
+
+```bash
+# Custom arapuca checkout and install prefix
+make setup ARAPUCA_DIR=/path/to/arapuca PREFIX=/opt/arapuca
+
+# Ensure pkg-config finds the installed library
 export PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig
 ```
 
-Re-run `make setup` whenever the arapuca library changes.
+Re-run `make setup` (or `make setup-microvm`) whenever the arapuca
+library changes.
 
 ## License
 

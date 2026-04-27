@@ -108,6 +108,12 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 	C.arapuca_profile_set_max_file_size_mb(profile, C.uint64_t(cfg.Profile.MaxFileSizeMB))
 	C.arapuca_profile_set_netns(profile, C.bool(cfg.Profile.UseNetNS))
 
+	if cfg.Profile.Isolation != nil {
+		if err := applyIsolation(unsafe.Pointer(profile), cfg.Profile.Isolation); err != nil {
+			return nil, err
+		}
+	}
+
 	// Build config.
 	lcfg := C.arapuca_config_new()
 	if lcfg == nil {
@@ -321,13 +327,26 @@ func (p *Process) Cleanup() {
 
 // Profile defines the restrictions applied to a sandboxed subprocess.
 type Profile struct {
-	ReadPaths     []string // Allowed read-only paths.
-	WritePaths    []string // Allowed read-write paths.
-	MaxMemoryMB   uint64   // Memory limit in MB (0 = no limit).
-	MaxCPUPct     uint32   // CPU percentage (0 = no limit; 200 = 2 cores).
-	MaxPIDs       uint32   // Max processes (0 = no limit).
-	MaxFileSizeMB uint64   // Max file size in MB (0 = no limit).
-	UseNetNS      bool     // Use network namespace isolation.
+	ReadPaths     []string          // Allowed read-only paths.
+	WritePaths    []string          // Allowed read-write paths.
+	MaxMemoryMB   uint64            // Memory limit in MB (0 = no limit).
+	MaxCPUPct     uint32            // CPU percentage (0 = no limit; 200 = 2 cores).
+	MaxPIDs       uint32            // Max processes (0 = no limit).
+	MaxFileSizeMB uint64            // Max file size in MB (0 = no limit).
+	UseNetNS      bool              // Use network namespace isolation.
+	Isolation     *MicroVmIsolation // Micro-VM isolation (nil = process-level sandbox).
+}
+
+// MicroVmIsolation configures micro-VM isolation via libkrun.
+// Set either Distro+Version or ImagePath, not both.
+// Requires building with -tags microvm against a microvm-enabled
+// libarapuca.a (make install INSTALL_FEATURES=microvm).
+type MicroVmIsolation struct {
+	Distro    string // Distro name (e.g. "fedora", "centos"). Mutually exclusive with ImagePath.
+	Version   string // Distro version (e.g. "42", "9"). Mutually exclusive with ImagePath.
+	ImagePath string // Explicit qcow2 path. Mutually exclusive with Distro/Version.
+	CPUs      uint32 // Number of vCPUs (must be > 0).
+	MemMB     uint32 // Memory in MB (must be > 0).
 }
 
 // Config holds the full configuration for launching a sandboxed process.
