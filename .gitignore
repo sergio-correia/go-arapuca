@@ -1,5 +1,6 @@
 *.swp
 *.swo
 *~
+lib/
 staging/
 CLAUDE.md

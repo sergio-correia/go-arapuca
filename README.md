@@ -13,15 +13,33 @@ namespace isolation, rlimits, pdeathsig, setsid, environment sanitization.
 On **macOS**: Apple's sandbox-exec (Seatbelt) with deny-default profiles,
 rlimits, memory polling, parent-PID watchdog.
 
+## Prerequisites
+
+- Go 1.25+ with `CGO_ENABLED=1`
+- C compiler (gcc or clang)
+- pkg-config
+- `libarapuca.a`, `arapuca.h`, and `arapuca.pc` installed where
+  pkg-config can find them (see [Building the C library](#building-the-c-library))
+
 ## Install
 
 ```bash
 go get github.com/sergio-correia/go-arapuca
 ```
 
-Requires `CGO_ENABLED=1` and a C compiler (gcc or clang). The static
-library (`libarapuca.a`) is vendored via git-lfs — no Rust toolchain
-needed.
+## Versioning
+
+go-arapuca links against arapuca's C ABI via pkg-config. There is no
+automatic version coupling — you must keep them in sync. Each
+go-arapuca release documents the minimum arapuca version it requires:
+
+| go-arapuca | arapuca (min) |
+|------------|---------------|
+| v0.2.0+    | v0.1.1        |
+| v0.1.x     | v0.1.0        |
+
+If you see link errors or crashes, rebuild and reinstall the C
+library first.
 
 ## Usage
 
@@ -145,13 +163,33 @@ type ResourceUsage struct {
   to OS threads (arapuca uses thread-local error storage).
 - Context cancellation sends SIGKILL to the process group.
 
-## Building from source
+## Building the C library
 
-To update the vendored `libarapuca.a` from a local arapuca build:
+go-arapuca links against `libarapuca.a` (a Rust static library)
+discovered via pkg-config. To build and install it from a local
+arapuca checkout:
 
 ```bash
-make update-lib ARAPUCA_DIR=../arapuca
+# Build and install to ~/.local (default)
+make setup
+
+# Or specify a different arapuca checkout and/or prefix
+make setup ARAPUCA_DIR=/path/to/arapuca PREFIX=/opt/arapuca
 ```
+
+This runs `make install` in the arapuca repo, which:
+1. Builds `libarapuca.a` via `cargo build --release`
+2. Generates `arapuca.h` via cbindgen
+3. Generates `arapuca.pc` with the correct link flags
+4. Installs all three to `$(PREFIX)/{lib,include,lib/pkgconfig}`
+
+After installing, ensure pkg-config can find it:
+
+```bash
+export PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig
+```
+
+Re-run `make setup` whenever the arapuca library changes.
 
 ## License
 

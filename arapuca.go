@@ -13,13 +13,8 @@
 package arapuca
 
 /*
-#cgo linux,amd64  LDFLAGS: -L${SRCDIR}/lib/linux_amd64 -larapuca -ldl -lpthread -lm
-#cgo linux,arm64  LDFLAGS: -L${SRCDIR}/lib/linux_arm64 -larapuca -ldl -lpthread -lm
-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin_amd64 -larapuca -ldl -lpthread -lm -framework Security
-#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin_arm64 -larapuca -ldl -lpthread -lm -framework Security
-#cgo CFLAGS: -I${SRCDIR}/lib
-
-#include "arapuca.h"
+#cgo pkg-config: arapuca
+#include <arapuca.h>
 #include <stdlib.h>
 */
 import "C"

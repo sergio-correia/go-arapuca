@@ -1,6 +1,9 @@
 GO_VERSION := 1.25
 
-.PHONY: build test lint vet check clean update-lib
+.PHONY: build test lint vet check clean setup
+
+ARAPUCA_DIR ?= ../arapuca
+PREFIX      ?= $(HOME)/.local
 
 build:
 	CGO_ENABLED=1 go build ./...
@@ -19,12 +22,8 @@ check: vet test
 clean:
 	go clean -cache
 
-# Update the vendored static library from a local arapuca build.
-# Usage: make update-lib ARAPUCA_DIR=../arapuca
-ARAPUCA_DIR ?= ../arapuca
-
-update-lib:
-	cd $(ARAPUCA_DIR) && cargo build --release
-	cp $(ARAPUCA_DIR)/target/release/libarapuca.a lib/linux_amd64/
-	cp $(ARAPUCA_DIR)/include/arapuca.h lib/
-	@echo "Updated lib from $(ARAPUCA_DIR)"
+# Build and install arapuca from a local checkout.
+# After running this, set PKG_CONFIG_PATH=$(PREFIX)/lib/pkgconfig
+setup:
+	cd $(ARAPUCA_DIR) && make install PREFIX=$(PREFIX)
+	@echo "Done. Run: export PKG_CONFIG_PATH=$(PREFIX)/lib/pkgconfig"
