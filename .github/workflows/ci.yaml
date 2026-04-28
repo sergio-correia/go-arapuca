@@ -21,6 +21,7 @@ jobs:
           git clone --depth 1 https://github.com/sergio-correia/arapuca.git /tmp/arapuca
           cd /tmp/arapuca
           make install PREFIX=/usr/local
+          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig" >> $GITHUB_ENV
 
       - name: Build
         run: CGO_ENABLED=1 go build ./...
