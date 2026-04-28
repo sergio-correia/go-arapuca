@@ -12,7 +12,7 @@ jobs:
     container: registry.fedoraproject.org/fedora:latest
     steps:
       - name: Install deps
-        run: dnf install -y gcc make cargo golang cbindgen pkg-config openssl-devel
+        run: dnf install -y gcc make cargo golang cbindgen pkg-config openssl-devel git-core
 
       - uses: actions/checkout@v4
 
