@@ -7,64 +7,34 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
+    container: registry.fedoraproject.org/fedora:latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
+      - name: Install deps
+        run: dnf install -y gcc make cargo golang cbindgen pkg-config openssl-devel
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
+      - uses: actions/checkout@v4
+
+      - name: Clone and install arapuca
+        run: |
+          git clone --depth 1 https://github.com/sergio-correia/arapuca.git /tmp/arapuca
+          cd /tmp/arapuca
+          make install PREFIX=/usr/local
 
       - name: Build
         run: CGO_ENABLED=1 go build ./...
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
-      - name: Verify LFS
-        run: |
-          file lib/linux_amd64/libarapuca.a
-          ls -la lib/linux_amd64/libarapuca.a
-
       - name: Test
         run: CGO_ENABLED=1 go test -v ./...
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
-
       - name: Vet
-        run: go vet ./...
+        run: CGO_ENABLED=1 go vet ./...
 
       - name: Format check
         run: |
           gofmt -l . | tee /tmp/gofmt.out
           test ! -s /tmp/gofmt.out
-
-  module:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: "1.25"
 
       - name: Module tidy check
         run: |
