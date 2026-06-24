@@ -362,18 +362,18 @@ const (
 
 // Profile defines the restrictions applied to a sandboxed subprocess.
 type Profile struct {
-	ReadPaths      []string          // Allowed read-only paths.
-	WritePaths     []string          // Allowed read-write paths.
-	MaxMemoryMB    uint64            // Memory limit in MB (0 = no limit).
-	MaxCPUPct      uint32            // CPU percentage (0 = no limit; 200 = 2 cores).
-	MaxPIDs        uint32            // Max processes (0 = no limit).
-	MaxFileSizeMB  uint64            // Max file size in MB (0 = no limit).
-	MaxOpenFiles   uint64            // Max open file descriptors (0 = no limit, RLIMIT_NOFILE).
-	UseNetNS       bool              // Use network namespace isolation.
-	UsePidNS       bool              // Use PID namespace isolation (process appears as PID 1).
-	DnsCapture     bool              // Capture DNS queries as audit events (requires UseNetNS).
+	ReadPaths      []string           // Allowed read-only paths.
+	WritePaths     []string           // Allowed read-write paths.
+	MaxMemoryMB    uint64             // Memory limit in MB (0 = no limit).
+	MaxCPUPct      uint32             // CPU percentage (0 = no limit; 200 = 2 cores).
+	MaxPIDs        uint32             // Max processes (0 = no limit).
+	MaxFileSizeMB  uint64             // Max file size in MB (0 = no limit).
+	MaxOpenFiles   uint64             // Max open file descriptors (0 = no limit, RLIMIT_NOFILE).
+	UseNetNS       bool               // Use network namespace isolation.
+	UsePidNS       bool               // Use PID namespace isolation (process appears as PID 1).
+	DnsCapture     bool               // Capture DNS queries as audit events (requires UseNetNS).
 	SeccompProfile SeccompProfileKind // Seccomp profile: SeccompProfileDefault (strict), SeccompProfileStrict, or SeccompProfileBaseline (for Bun/Claude Code).
-	Isolation      *MicroVmIsolation // Micro-VM isolation (nil = process-level sandbox).
+	Isolation      *MicroVmIsolation  // Micro-VM isolation (nil = process-level sandbox).
 }
 
 // MicroVmIsolation configures micro-VM isolation via libkrun.
