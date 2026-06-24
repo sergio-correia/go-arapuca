@@ -1,6 +1,7 @@
 package arapuca
 
 import (
+	"context"
 	"os"
 	"testing"
 )
@@ -74,5 +75,49 @@ func TestDiskUsageMBNonexistent(t *testing.T) {
 	mb := DiskUsageMB("/nonexistent-xyz-123")
 	if mb != 0 {
 		t.Errorf("expected 0 for nonexistent path, got %d", mb)
+	}
+}
+
+func TestProfileValidation_DnsCaptureRequiresNetNS(t *testing.T) {
+	sb, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer sb.Close()
+
+	ctx := context.Background()
+	_, err = sb.Launch(ctx, Config{
+		Profile: Profile{DnsCapture: true, UseNetNS: false},
+	}, "/bin/true", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for DnsCapture without UseNetNS, got nil")
+	}
+}
+
+func TestProfileValidation_InvalidSeccompProfile(t *testing.T) {
+	sb, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer sb.Close()
+
+	ctx := context.Background()
+	_, err = sb.Launch(ctx, Config{
+		Profile: Profile{SeccompProfile: "invalid-profile-xyz"},
+	}, "/bin/true", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid seccomp profile, got nil")
+	}
+}
+
+func TestSeccompProfileConstants(t *testing.T) {
+	if SeccompProfileDefault != "" {
+		t.Errorf("SeccompProfileDefault = %q, want %q", SeccompProfileDefault, "")
+	}
+	if SeccompProfileStrict != "strict" {
+		t.Errorf("SeccompProfileStrict = %q, want %q", SeccompProfileStrict, "strict")
+	}
+	if SeccompProfileBaseline != "baseline" {
+		t.Errorf("SeccompProfileBaseline = %q, want %q", SeccompProfileBaseline, "baseline")
 	}
 }
