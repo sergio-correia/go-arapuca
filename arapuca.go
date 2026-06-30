@@ -112,17 +112,33 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 	C.arapuca_profile_set_max_pids(profile, C.uint32_t(cfg.Profile.MaxPIDs))
 	C.arapuca_profile_set_max_file_size_mb(profile, C.uint64_t(cfg.Profile.MaxFileSizeMB))
 	if cfg.Profile.MaxOpenFiles > 0 {
+		// Unlike the other resource limits (MaxMemoryMB, MaxCPUPct, MaxPIDs,
+		// MaxFileSizeMB) where zero is treated as "no limit" by the C library,
+		// arapuca_profile_set_max_open_files(0) sets RLIMIT_NOFILE to literal
+		// zero, which would prevent the process from opening any files.
+		// Guard here to preserve the "0 = no limit" contract.
 		C.arapuca_profile_set_max_open_files(profile, C.uint64_t(cfg.Profile.MaxOpenFiles))
 	}
 	C.arapuca_profile_set_netns(profile, C.bool(cfg.Profile.UseNetNS))
 	C.arapuca_profile_set_pidns(profile, C.bool(cfg.Profile.UsePidNS))
 	C.arapuca_profile_set_dns_capture(profile, C.bool(cfg.Profile.DnsCapture))
 	if cfg.Profile.SeccompProfile != SeccompProfileDefault {
+		// Go-side allowlist: reject unknown profile names before reaching the
+		// C library. This prevents a more-permissive future profile from being
+		// accepted silently without a conscious update to the constants.
+		switch cfg.Profile.SeccompProfile {
+		case SeccompProfileStrict, SeccompProfileBaseline:
+			// valid
+		default:
+			return nil, fmt.Errorf("arapuca: unknown seccomp profile %q", cfg.Profile.SeccompProfile)
+		}
 		cs := C.CString(string(cfg.Profile.SeccompProfile))
+		runtime.LockOSThread()
 		rc := C.arapuca_profile_set_seccomp(profile, cs)
+		runtime.UnlockOSThread()
 		C.free(unsafe.Pointer(cs))
 		if rc != 0 {
-			return nil, fmt.Errorf("arapuca: invalid seccomp profile %q", cfg.Profile.SeccompProfile)
+			return nil, fmt.Errorf("arapuca: set seccomp profile %q: %s", cfg.Profile.SeccompProfile, lastError())
 		}
 	}
 
@@ -206,6 +222,17 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 	}
 
 	// Launch.
+	// Defer KeepAlive for FDs so it runs on both success and error paths —
+	// prevents the GC from finalizing *os.File before C duplicates the FD.
+	defer func() {
+		runtime.KeepAlive(cfg.Stdin)
+		runtime.KeepAlive(cfg.Stdout)
+		runtime.KeepAlive(cfg.Stderr)
+		for _, f := range extraFiles {
+			runtime.KeepAlive(f)
+		}
+	}()
+
 	runtime.LockOSThread()
 	proc := C.arapuca_launch(
 		s.sb, lcfg, cCmd,
@@ -218,15 +245,6 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		return nil, err
 	}
 	runtime.UnlockOSThread()
-
-	// Prevent GC from finalizing the *os.File (and closing the FD)
-	// before the C code has duplicated it via F_DUPFD_CLOEXEC.
-	runtime.KeepAlive(cfg.Stdin)
-	runtime.KeepAlive(cfg.Stdout)
-	runtime.KeepAlive(cfg.Stderr)
-	for _, f := range extraFiles {
-		runtime.KeepAlive(f)
-	}
 
 	pid := int(C.arapuca_process_pid(proc))
 	p := &Process{
