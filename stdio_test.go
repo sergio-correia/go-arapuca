@@ -33,6 +33,9 @@ func TestStdioPipeEcho(t *testing.T) {
 		TaskID: "echo-test",
 		Stdout: stdoutW,
 		Stderr: stderrW,
+		Profile: Profile{
+			ReadPaths: []string{"/usr", "/lib", "/lib64", "/bin"},
+		},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -151,6 +154,9 @@ func TestStdioPipeCatRelay(t *testing.T) {
 		Stdin:  stdinR,
 		Stdout: stdoutW,
 		Stderr: stderrW,
+		Profile: Profile{
+			ReadPaths: []string{"/usr", "/lib", "/lib64", "/bin"},
+		},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
