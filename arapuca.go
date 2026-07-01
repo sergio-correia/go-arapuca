@@ -90,6 +90,12 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		return nil, fmt.Errorf("arapuca: DnsCapture requires UseNetNS")
 	}
 
+	// AllowedHosts requires libarapuca connect proxy FFI (arapuca#45).
+	// Return a clear error rather than silently ignoring the field.
+	if len(cfg.AllowedHosts) > 0 {
+		return nil, errors.New("arapuca: AllowedHosts requires libarapuca with connect proxy FFI support (arapuca#45 not yet merged)")
+	}
+
 	// Build profile.
 	profile := C.arapuca_profile_new()
 	if profile == nil {
@@ -406,6 +412,21 @@ type MicroVmIsolation struct {
 	MemMB     uint32 // Memory in MB (must be > 0).
 }
 
+// AllowedHost specifies an outbound host:port that the CONNECT proxy
+// will allow connections to from inside the network namespace sandbox.
+// Use a leading dot in Host for suffix matching (e.g. ".googleapis.com"
+// matches any subdomain). Port must be 1-65535.
+//
+// When AllowedHosts is non-empty on Config, the library automatically
+// enables UseNetNS and forks a CONNECT proxy that permits only the
+// listed destinations.
+//
+// Requires libarapuca with connect proxy FFI support (arapuca#45).
+type AllowedHost struct {
+	Host string // Exact hostname or ".suffix" for wildcard matching.
+	Port uint16 // TCP port (1-65535).
+}
+
 // Config holds the full configuration for launching a sandboxed process.
 type Config struct {
 	Profile            Profile
@@ -417,6 +438,7 @@ type Config struct {
 	Stdout             *os.File          // Redirect stdout (nil = inherit).
 	Stderr             *os.File          // Redirect stderr (nil = inherit).
 	NetworkProxySocket string            // Path to network proxy Unix socket.
+	AllowedHosts       []AllowedHost     // Outbound allowlist for CONNECT proxy (requires arapuca#45).
 	Env                map[string]string // Caller-supplied env vars for subprocess.
 }
 

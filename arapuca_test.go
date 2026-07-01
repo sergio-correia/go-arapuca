@@ -3,6 +3,7 @@ package arapuca
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -91,6 +92,26 @@ func TestProfileValidation_DnsCaptureRequiresNetNS(t *testing.T) {
 	}, "/bin/true", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for DnsCapture without UseNetNS, got nil")
+	}
+}
+
+// TestAllowedHosts_NotYetSupported verifies that setting AllowedHosts
+// returns a clear error until libarapuca exposes the connect proxy FFI.
+func TestAllowedHosts_NotYetSupported(t *testing.T) {
+	sb, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer sb.Close()
+
+	_, err = sb.Launch(context.Background(), Config{
+		AllowedHosts: []AllowedHost{{Host: "127.0.0.1", Port: 3001}},
+	}, "/bin/true", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for AllowedHosts (FFI not yet available)")
+	}
+	if !strings.Contains(err.Error(), "AllowedHosts") {
+		t.Errorf("expected error to mention AllowedHosts, got: %v", err)
 	}
 }
 
