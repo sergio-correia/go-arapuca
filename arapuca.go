@@ -90,12 +90,6 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		return nil, fmt.Errorf("arapuca: DnsCapture requires UseNetNS")
 	}
 
-	// AllowedHosts requires libarapuca connect proxy FFI (arapuca#45).
-	// Return a clear error rather than silently ignoring the field.
-	if len(cfg.AllowedHosts) > 0 {
-		return nil, errors.New("arapuca: AllowedHosts requires libarapuca with connect proxy FFI support (arapuca#45 not yet merged)")
-	}
-
 	// Build profile.
 	profile := C.arapuca_profile_new()
 	if profile == nil {
@@ -196,6 +190,21 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		C.arapuca_config_add_env(lcfg, ck, cv)
 		C.free(unsafe.Pointer(ck))
 		C.free(unsafe.Pointer(cv))
+	}
+
+	// Add allowed hosts for CONNECT proxy.
+	for _, ah := range cfg.AllowedHosts {
+		ch := C.CString(ah.Host)
+		runtime.LockOSThread()
+		rc := C.arapuca_config_add_allowed_host(lcfg, ch, C.uint16_t(ah.Port))
+		if rc != 0 {
+			err := fmt.Errorf("arapuca: add allowed host %s:%d: %s", ah.Host, ah.Port, lastError())
+			runtime.UnlockOSThread()
+			C.free(unsafe.Pointer(ch))
+			return nil, err
+		}
+		runtime.UnlockOSThread()
+		C.free(unsafe.Pointer(ch))
 	}
 
 	// Build command.
@@ -420,8 +429,6 @@ type MicroVmIsolation struct {
 // When AllowedHosts is non-empty on Config, the library automatically
 // enables UseNetNS and forks a CONNECT proxy that permits only the
 // listed destinations.
-//
-// Requires libarapuca with connect proxy FFI support (arapuca#45).
 type AllowedHost struct {
 	Host string // Exact hostname or ".suffix" for wildcard matching.
 	Port uint16 // TCP port (1-65535).
@@ -438,7 +445,7 @@ type Config struct {
 	Stdout             *os.File          // Redirect stdout (nil = inherit).
 	Stderr             *os.File          // Redirect stderr (nil = inherit).
 	NetworkProxySocket string            // Path to network proxy Unix socket.
-	AllowedHosts       []AllowedHost     // Outbound allowlist for CONNECT proxy (requires arapuca#45).
+	AllowedHosts       []AllowedHost     // Outbound allowlist for CONNECT proxy.
 	Env                map[string]string // Caller-supplied env vars for subprocess.
 }
 
