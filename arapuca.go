@@ -86,7 +86,10 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 	}
 
 	// Validate DnsCapture dependency before building profile.
-	if cfg.Profile.DnsCapture && !cfg.Profile.UseNetNS {
+	// AllowedHosts auto-enables UseNetNS at the library level, so
+	// the guard only fires when neither UseNetNS nor AllowedHosts
+	// would provide the required network namespace.
+	if cfg.Profile.DnsCapture && !cfg.Profile.UseNetNS && len(cfg.AllowedHosts) == 0 {
 		return nil, fmt.Errorf("arapuca: DnsCapture requires UseNetNS")
 	}
 
@@ -192,19 +195,10 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		C.free(unsafe.Pointer(cv))
 	}
 
-	// Add allowed hosts for CONNECT proxy.
-	for _, ah := range cfg.AllowedHosts {
-		ch := C.CString(ah.Host)
-		runtime.LockOSThread()
-		rc := C.arapuca_config_add_allowed_host(lcfg, ch, C.uint16_t(ah.Port))
-		if rc != 0 {
-			err := fmt.Errorf("arapuca: add allowed host %s:%d: %s", ah.Host, ah.Port, lastError())
-			runtime.UnlockOSThread()
-			C.free(unsafe.Pointer(ch))
-			return nil, err
-		}
-		runtime.UnlockOSThread()
-		C.free(unsafe.Pointer(ch))
+	// Add allowed hosts for CONNECT proxy (Linux only; stub
+	// returns error on other platforms if hosts are non-empty).
+	if err := addAllowedHosts(lcfg, cfg.AllowedHosts); err != nil {
+		return nil, err
 	}
 
 	// Build command.
