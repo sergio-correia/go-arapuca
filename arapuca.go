@@ -86,7 +86,10 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 	}
 
 	// Validate DnsCapture dependency before building profile.
-	if cfg.Profile.DnsCapture && !cfg.Profile.UseNetNS {
+	// AllowedHosts auto-enables UseNetNS at the library level, so
+	// the guard only fires when neither UseNetNS nor AllowedHosts
+	// would provide the required network namespace.
+	if cfg.Profile.DnsCapture && !cfg.Profile.UseNetNS && len(cfg.AllowedHosts) == 0 {
 		return nil, fmt.Errorf("arapuca: DnsCapture requires UseNetNS")
 	}
 
@@ -190,6 +193,12 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		C.arapuca_config_add_env(lcfg, ck, cv)
 		C.free(unsafe.Pointer(ck))
 		C.free(unsafe.Pointer(cv))
+	}
+
+	// Add allowed hosts for CONNECT proxy (Linux only; stub
+	// returns error on other platforms if hosts are non-empty).
+	if err := addAllowedHosts(lcfg, cfg.AllowedHosts); err != nil {
+		return nil, err
 	}
 
 	// Build command.
@@ -406,6 +415,19 @@ type MicroVmIsolation struct {
 	MemMB     uint32 // Memory in MB (must be > 0).
 }
 
+// AllowedHost specifies an outbound host:port that the CONNECT proxy
+// will allow connections to from inside the network namespace sandbox.
+// Use a leading dot in Host for suffix matching (e.g. ".googleapis.com"
+// matches any subdomain). Port must be 1-65535.
+//
+// When AllowedHosts is non-empty on Config, the library automatically
+// enables UseNetNS and forks a CONNECT proxy that permits only the
+// listed destinations.
+type AllowedHost struct {
+	Host string // Exact hostname or ".suffix" for wildcard matching.
+	Port uint16 // TCP port (1-65535).
+}
+
 // Config holds the full configuration for launching a sandboxed process.
 type Config struct {
 	Profile            Profile
@@ -417,6 +439,7 @@ type Config struct {
 	Stdout             *os.File          // Redirect stdout (nil = inherit).
 	Stderr             *os.File          // Redirect stderr (nil = inherit).
 	NetworkProxySocket string            // Path to network proxy Unix socket.
+	AllowedHosts       []AllowedHost     // Outbound allowlist for CONNECT proxy.
 	Env                map[string]string // Caller-supplied env vars for subprocess.
 }
 

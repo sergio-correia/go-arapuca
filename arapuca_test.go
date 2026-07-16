@@ -3,6 +3,7 @@ package arapuca
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -91,6 +92,26 @@ func TestProfileValidation_DnsCaptureRequiresNetNS(t *testing.T) {
 	}, "/bin/true", nil, nil)
 	if err == nil {
 		t.Fatal("expected error for DnsCapture without UseNetNS, got nil")
+	}
+}
+
+// TestAllowedHosts_InvalidPort verifies that port 0 is rejected by
+// the FFI layer.
+func TestAllowedHosts_InvalidPort(t *testing.T) {
+	sb, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer sb.Close()
+
+	_, err = sb.Launch(context.Background(), Config{
+		AllowedHosts: []AllowedHost{{Host: "127.0.0.1", Port: 0}},
+	}, "/bin/true", nil, nil)
+	if err == nil {
+		t.Fatal("expected error for AllowedHost with port 0")
+	}
+	if !strings.Contains(err.Error(), "allowed host") {
+		t.Errorf("expected error to mention allowed host, got: %v", err)
 	}
 }
 
