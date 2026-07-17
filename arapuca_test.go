@@ -3,6 +3,7 @@ package arapuca
 import (
 	"context"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -98,6 +99,10 @@ func TestProfileValidation_DnsCaptureRequiresNetNS(t *testing.T) {
 // TestAllowedHosts_InvalidPort verifies that port 0 is rejected by
 // the FFI layer.
 func TestAllowedHosts_InvalidPort(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("AllowedHosts FFI is Linux-only")
+	}
+
 	sb, err := New()
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -110,7 +115,7 @@ func TestAllowedHosts_InvalidPort(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for AllowedHost with port 0")
 	}
-	if !strings.Contains(err.Error(), "allowed host") {
+	if !strings.Contains(strings.ToLower(err.Error()), "allowed host") {
 		t.Errorf("expected error to mention allowed host, got: %v", err)
 	}
 }
