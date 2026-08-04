@@ -2,10 +2,12 @@ package arapuca
 
 import (
 	"context"
+	"io"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNew(t *testing.T) {
@@ -236,6 +238,153 @@ func TestProfileValidation_DnsCapture_Happy(t *testing.T) {
 	// Should not error with "DnsCapture requires UseNetNS" since UseNetNS is set.
 	if err != nil && err.Error() == "arapuca: DnsCapture requires UseNetNS" {
 		t.Errorf("DnsCapture with UseNetNS should not error: %v", err)
+	}
+}
+
+// TestAllowExec_ShebangScript verifies that a shebang script runs
+// successfully when AllowExec is true and the interpreter is in a
+// read path.
+func TestAllowExec_ShebangScript(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("AllowExec/Landlock is Linux-only")
+	}
+	if WrapperPath() == "" {
+		t.Skip("arapuca wrapper binary not found")
+	}
+	if LandlockABIVersion() == 0 {
+		t.Skip("Landlock not available")
+	}
+
+	// Create a shebang script in a temp dir that will be a write path.
+	dir := t.TempDir()
+	script := dir + "/hello.sh"
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho hello-from-shebang\n"), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	sb, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer sb.Close()
+
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	proc, err := sb.Launch(ctx, Config{
+		TaskID: "shebang-allow-exec",
+		Stdout: stdoutW,
+		Stderr: stderrW,
+		Profile: Profile{
+			AllowExec:  true,
+			ReadPaths:  []string{"/usr", "/lib", "/lib64", "/bin"},
+			WritePaths: []string{dir},
+		},
+	}, script, nil, nil)
+	if err != nil {
+		stdoutW.Close()
+		stderrW.Close()
+		t.Fatalf("Launch: %v", err)
+	}
+
+	stdoutW.Close()
+	stderrW.Close()
+
+	stdout, _ := io.ReadAll(stdoutR)
+	stderr, _ := io.ReadAll(stderrR)
+
+	exitCode, err := proc.Wait()
+	proc.Cleanup()
+
+	t.Logf("exit=%d err=%v stdout=%q stderr=%q", exitCode, err, stdout, stderr)
+
+	if exitCode != 0 {
+		t.Errorf("expected exit 0, got %d (err: %v, stderr: %q)", exitCode, err, stderr)
+	}
+	if got := strings.TrimSpace(string(stdout)); got != "hello-from-shebang" {
+		t.Errorf("expected stdout 'hello-from-shebang', got %q", got)
+	}
+}
+
+// TestAllowExec_DefaultBlocksShebang verifies that a shebang script
+// is blocked when AllowExec is false (the default), because Landlock
+// denies Execute on the interpreter.
+func TestAllowExec_DefaultBlocksShebang(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("AllowExec/Landlock is Linux-only")
+	}
+	if WrapperPath() == "" {
+		t.Skip("arapuca wrapper binary not found")
+	}
+	if LandlockABIVersion() == 0 {
+		t.Skip("Landlock not available")
+	}
+
+	dir := t.TempDir()
+	script := dir + "/hello.sh"
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho hello-from-shebang\n"), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	sb, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	defer sb.Close()
+
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	proc, err := sb.Launch(ctx, Config{
+		TaskID: "shebang-deny-exec",
+		Stdout: stdoutW,
+		Stderr: stderrW,
+		Profile: Profile{
+			AllowExec:  false,
+			ReadPaths:  []string{"/usr", "/lib", "/lib64", "/bin"},
+			WritePaths: []string{dir},
+		},
+	}, script, nil, nil)
+	if err != nil {
+		stdoutW.Close()
+		stderrW.Close()
+		// Launch itself failing is acceptable -- Landlock may block
+		// even the initial exec of the script.
+		t.Logf("Launch blocked (expected): %v", err)
+		return
+	}
+
+	stdoutW.Close()
+	stderrW.Close()
+
+	_, _ = io.ReadAll(stdoutR)
+	_, _ = io.ReadAll(stderrR)
+
+	exitCode, err := proc.Wait()
+	proc.Cleanup()
+
+	t.Logf("exit=%d err=%v", exitCode, err)
+
+	if exitCode == 0 && err == nil {
+		t.Error("expected shebang script to fail with AllowExec=false, but it succeeded")
 	}
 }
 

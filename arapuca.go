@@ -122,6 +122,7 @@ func (s *Sandbox) Launch(ctx context.Context, cfg Config, cmd string, args []str
 		// Guard here to preserve the "0 = no limit" contract.
 		C.arapuca_profile_set_max_open_files(profile, C.uint64_t(cfg.Profile.MaxOpenFiles))
 	}
+	C.arapuca_profile_set_allow_exec(profile, C.bool(cfg.Profile.AllowExec))
 	C.arapuca_profile_set_netns(profile, C.bool(cfg.Profile.UseNetNS))
 	C.arapuca_profile_set_pidns(profile, C.bool(cfg.Profile.UsePidNS))
 	C.arapuca_profile_set_dns_capture(profile, C.bool(cfg.Profile.DnsCapture))
@@ -396,6 +397,7 @@ type Profile struct {
 	MaxPIDs        uint32             // Max processes (0 = no limit).
 	MaxFileSizeMB  uint64             // Max file size in MB (0 = no limit).
 	MaxOpenFiles   uint64             // Max open file descriptors (0 = no limit, RLIMIT_NOFILE).
+	AllowExec      bool               // Allow execve on binaries in read AND write paths. Required for shebang scripts (e.g. Python handlers). Caution: with WritePaths, this creates a write-then-exec surface.
 	UseNetNS       bool               // Use network namespace isolation.
 	UsePidNS       bool               // Use PID namespace isolation (process appears as PID 1).
 	DnsCapture     bool               // Capture DNS queries as audit events (requires UseNetNS).
